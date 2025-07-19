@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>간지나는 HTML 계산기</title>
+    <!-- Tailwind CSS CDN 링크 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter 폰트 적용 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center bg-gray-100 p-4 sm:p-6 md:p-8">
+    <!-- 계산기 본체: 그림자, 둥근 모서리, 반응형 최대 너비 설정, 민트색 배경 -->
+    <div class="bg-emerald-200 shadow-xl rounded-2xl w-full max-w-md p-6 sm:p-8">
+        <!-- 결과 표시 화면 -->
+        <div class="bg-gray-800 text-white rounded-xl p-4 mb-4 text-right overflow-hidden shadow-inner">
+            <!-- 입력값 표시 (작은 글씨) -->
+            <div id="inputDisplay" class="text-xl sm:text-2xl text-gray-400 h-8 sm:h-10 overflow-hidden break-all"></div>
+            <!-- 결과값 표시 (큰 글씨) -->
+            <div id="resultDisplay" class="text-3xl sm:text-5xl font-bold h-12 sm:h-16 overflow-hidden break-all">0</div>
+        </div>
+
+        <!-- 버튼 그리드 레이아웃 -->
+        <div class="grid grid-cols-4 gap-3 sm:gap-4">
+            <!-- 버튼들은 JavaScript로 동적으로 생성됩니다 -->
+        </div>
+    </div>
+
+    <script>
+        // JavaScript 코드 시작
+        const inputDisplay = document.getElementById('inputDisplay');
+        const resultDisplay = document.getElementById('resultDisplay');
+        const buttonGrid = document.querySelector('.grid-cols-4');
+
+        let currentInput = ''; // 현재 입력된 수식
+        let currentResult = ''; // 계산 결과
+
+        // 수식을 안전하게 계산하는 함수 (eval 대신 사용)
+        const evaluateExpression = (expression) => {
+            // 곱셈/나눗셈 기호는 JavaScript에 맞게 * / 로 변환
+            expression = expression.replace(/×/g, '*').replace(/÷/g, '/');
+
+            // 숫자, 소수점, 음수 부호, 연산자로 토큰 분리
+            // 예: "5+3*(-2)/4" -> ['5', '+', '3', '*', '(', '-2', ')', '/', '4']
+            // 음수 시작을 고려하여 정규식 수정: ^-? 로 시작하는 음수 숫자도 인식
+            const tokens = expression.match(/(-?\d+\.?\d*)|([+\-*/])/g);
+
+            if (!tokens || tokens.length === 0) return NaN;
+
+            const parsedTokens = tokens.map(token => {
+                if (token.match(/^-?\d+\.?\d*$/)) {
+                    return parseFloat(token);
+                }
+                return token;
+            });
+
+            // 1차 계산: 곱셈과 나눗셈 처리
+            let tempArr = [];
+            let i = 0;
+            while (i < parsedTokens.length) {
+                if (parsedTokens[i] === '*' || parsedTokens[i] === '/') {
+                    const operator = parsedTokens[i];
+                    const prevVal = tempArr.pop();
+                    const nextVal = parsedTokens[i + 1];
+
+                    if (typeof prevVal !== 'number' || typeof nextVal !== 'number') return NaN;
+
+                    let res;
+                    if (operator === '*') {
+                        res = prevVal * nextVal;
+                    } else if (operator === '/') {
+                        if (nextVal === 0) return Infinity;
+                        res = prevVal / nextVal;
+                    }
+                    tempArr.push(res);
+                    i += 2;
+                } else {
+                    tempArr.push(parsedTokens[i]);
+                    i += 1;
+                }
+            }
+
+            // 2차 계산: 덧셈과 뺄셈 처리
+            if (tempArr.length === 0) return NaN;
+
+            let finalResult = tempArr[0];
+            i = 1;
+            while (i < tempArr.length) {
+                if (tempArr[i] === '+' || tempArr[i] === '-') {
+                    const operator = tempArr[i];
+                    const nextVal = tempArr[i + 1];
+
+                    if (typeof nextVal !== 'number') return NaN;
+
+                    if (operator === '+') {
+                        finalResult += nextVal;
+                    } else if (operator === '-') {
+                        finalResult -= nextVal;
+                    }
+                    i += 2;
+                } else {
+                    return NaN; // 잘못된 수식
+                }
+            }
+            return finalResult;
+        };
+
+        // 버튼 클릭 핸들러 함수
+        const handleClick = (value) => {
+            if (value === 'C') {
+                currentInput = '';
+                currentResult = '';
+                inputDisplay.textContent = '';
+                resultDisplay.textContent = '0';
+            } else if (value === '=') {
+                try {
+                    const calculatedResult = evaluateExpression(currentInput);
+                    if (isNaN(calculatedResult)) {
+                        resultDisplay.textContent = '오류';
+                    } else if (!isFinite(calculatedResult)) {
+                        resultDisplay.textContent = '무한대';
+                    } else {
+                        currentResult = calculatedResult.toString();
+                        resultDisplay.textContent = currentResult;
+                        currentInput = currentResult; // 계산 결과가 다음 입력의 시작이 되도록
+                    }
+                } catch (error) {
+                    resultDisplay.textContent = '오류';
+                    currentInput = '';
+                }
+            } else if (value === 'AC') {
+                currentInput = '';
+                currentResult = '';
+                inputDisplay.textContent = '';
+                resultDisplay.textContent = '0';
+            } else {
+                // 결과가 표시된 상태에서 숫자나 '.'을 누르면 새로운 계산 시작
+                if (currentResult !== '' && !['÷', '×', '-', '+'].includes(value)) {
+                    currentInput = value;
+                    currentResult = '';
+                } else {
+                    // 연산자 연속 입력 방지 (단, 음수 부호는 허용)
+                    const lastChar = currentInput.slice(-1);
+                    if (['÷', '×', '+', '-'].includes(value) && ['÷', '×', '+', '-'].includes(lastChar)) {
+                        if (!(value === '-' && !['÷', '×', '+', '-'].includes(lastChar))) { // -5 같은 경우 허용
+                            currentInput = currentInput.slice(0, -1) + value; // 연산자 교체
+                        } else {
+                            currentInput += value; // -5 같은 경우 허용
+                        }
+                    } else {
+                        currentInput += value;
+                    }
+                }
+                inputDisplay.textContent = currentInput;
+            }
+        };
+
+        // 버튼 레이블에 귀여운 캐릭터(이모지) 추가
+        const getButtonDisplay = (buttonValue) => {
+            switch (buttonValue) {
+                case '0': return '0 💖';
+                case '1': return '1 🌟';
+                case '2': return '2 🌈';
+                case '3': return '3 🍀';
+                case '4': return '4 🐾';
+                case '5': return '5 🌻';
+                case '6': return '6 🎈';
+                case '7': return '7 ✨';
+                case '8': return '8 💫';
+                case '9': return '9 🚀';
+                case '.': return '. ⭐';
+                case 'AC': return 'AC 🔄';
+                case 'C': return 'C 🗑️';
+                case '=': return '= ✅';
+                default: return buttonValue;
+            }
+        };
+
+        // 계산기 버튼 레이아웃 정의
+        const buttons = [
+            { value: 'AC', span: 1, bgColor: 'bg-purple-300 hover:bg-purple-400' },
+            { value: 'C', span: 1, bgColor: 'bg-purple-300 hover:bg-purple-400' },
+            { value: '÷', span: 1, bgColor: 'bg-pink-300 hover:bg-pink-400' },
+            { value: '×', span: 1, bgColor: 'bg-pink-300 hover:bg-pink-400' },
+            { value: '7', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '8', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '9', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '-', span: 1, bgColor: 'bg-pink-300 hover:bg-pink-400' },
+            { value: '4', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '5', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '6', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '+', span: 1, bgColor: 'bg-pink-300 hover:bg-pink-400' },
+            { value: '1', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '2', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '3', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '=', span: 2, bgColor: 'bg-blue-400 hover:bg-blue-500' },
+            { value: '0', span: 2, bgColor: 'bg-emerald-100 hover:bg-emerald-200' },
+            { value: '.', span: 1, bgColor: 'bg-emerald-100 hover:bg-emerald-200' }
+        ];
+
+        // 버튼 생성 및 이벤트 리스너 추가
+        buttons.forEach(btn => {
+            const buttonElement = document.createElement('button');
+            buttonElement.textContent = getButtonDisplay(btn.value);
+            buttonElement.className = `
+                p-4 sm:p-5 rounded-xl text-2xl sm:text-3xl font-semibold 
+                transition-all duration-200 ease-in-out
+                ${btn.bgColor}
+                ${btn.span === 2 ? 'col-span-2' : ''}
+                text-gray-800 shadow-sm
+            `;
+            // 연산자 및 AC, C, = 버튼은 글자색을 흰색으로 변경
+            if (['AC', 'C', '÷', '×', '-', '+', '='].includes(btn.value)) {
+                buttonElement.classList.remove('text-gray-800');
+                buttonElement.classList.add('text-white');
+            }
+            buttonElement.onclick = () => handleClick(btn.value);
+            buttonGrid.appendChild(buttonElement);
+        });
+    </script>
+</body>
+</html>
